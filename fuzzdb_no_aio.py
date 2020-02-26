@@ -3,53 +3,23 @@ import re
 import argparse
 import time
 import datetime
-from colorama import Fore, Style
 import hashlib
 import threading
 import queue
 import xlwt
 import os
-# console_log=f'[{hour}:{minute}:{sec}]- {code} - {size}B -url'
-# console_log_302=f'[{hour}:{minute}:{sec}]- {code} - {size}B ->{_302url}'
+
 from lib.log import Log
+from lib.output import Output
 # 取消SSL警告
 requests.packages.urllib3.disable_warnings()
 # 存放最后筛选之后的结果
 result_queue = queue.Queue()
 
-#日志信息输出实例化对象
-logger=Log()
-
-def out2excel(name, pageobject_list_bf, pageobject_list_af=None):
-    workbook = xlwt.Workbook(encoding='utf-8')
-    worksheet = workbook.add_sheet('All')
-    worksheet.write(0, 0, 'Code')
-    worksheet.write(0, 1, 'Hash')
-    worksheet.write(0, 2, 'Size')
-    worksheet.write(0, 3, 'Path')
-    line = 0
-    for i in pageobject_list_bf:
-        line = line + 1
-        worksheet.write(line, 0, i.code)
-        worksheet.write(line, 1, i.hash)
-        worksheet.write(line, 2, i.size)
-        worksheet.write(line, 3, i.path)
-
-    if pageobject_list_af:
-        worksheet = workbook.add_sheet('Filter')
-        worksheet.write(0, 0, 'Code')
-        worksheet.write(0, 1, 'Hash')
-        worksheet.write(0, 2, 'Size')
-        worksheet.write(0, 3, 'Path')
-        line = 0
-        for i in pageobject_list_af:
-            line = line + 1
-            worksheet.write(line, 0, i.code)
-            worksheet.write(line, 1, i.hash)
-            worksheet.write(line, 2, i.size)
-            worksheet.write(line, 3, i.path)
-
-    workbook.save(f'{os.getcwd()}/reports/{name}-{str(datetime.datetime.now())[:-7]}.xls')
+# 日志信息输出实例化对象
+logger = Log()
+# 报告输出实例话对象
+outman = Output()
 
 
 class Page:
@@ -93,6 +63,7 @@ class Task(threading.Thread):
 #         self.
 #         self.proportion
 
+
 class Fuzzdir:
     def __init__(self, url):
         self.url = url
@@ -118,9 +89,6 @@ class Fuzzdir:
         f.close()
         return [i.strip() for i in mixed_keywords]
 
-
-
-
     # 获取请求url的状态码、大小、重定向URL,hash
 
     def _req_code(self, url):
@@ -140,7 +108,7 @@ class Fuzzdir:
             _302_url = req.url
             page_hash = hashlib.md5(req.content).hexdigest()
         except BaseException as e:
-            #print(e)
+            # print(e)
             code = 520
             size = 0
             _302_url = 0
@@ -155,11 +123,11 @@ class Fuzzdir:
         else:
             return False
 
+    # 检测页面是否有效
 
-    #检测页面是否有效
     def _check_valid(self):
         code, _, _, _ = self._req_code(self.url)
-        if code not in [200,403,404]:
+        if code not in [200, 403, 404]:
             return False
         else:
             return True
@@ -169,13 +137,14 @@ class Fuzzdir:
     def _check_404(self):
         url = self.url + '/check_404_' + str(time.time())
         code, _, _, _ = self._req_code(url)
-        if code in [200, 520,403]:
+        if code in [200, 520, 403]:
             return False
         elif code == 404:
             return True
         else:
             return True
     # 检测页面hash是否重复,Page对象列表
+
     def _check_page_hash(self, pageOblist):
         result = []
         result_hash = []
@@ -192,7 +161,12 @@ class Fuzzdir:
         code, size, _302_url, page_hash = self._req_code(url + i)
         path = i
 
-        logger.info(code=code, hash=page_hash, size=size, path=path, _302_url=_302_url)
+        logger.info(
+            code=code,
+            hash=page_hash,
+            size=size,
+            path=path,
+            _302_url=_302_url)
 
         if code in self.exist_code or self._302_code:
             page = Page(code, page_hash, size, path)
@@ -205,14 +179,15 @@ class Fuzzdir:
             self.if_files_exist(self.url, crawl_url)
             crawl_queue.task_done()
 
-    def out2txt(self):
-        pass
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-u", dest="url", help="Please input a url to dir")
 parser.add_argument("-l", dest="list", help="A list to scan")
-parser.add_argument("-t", dest="thread",default=5, help="The number of threads")
+parser.add_argument(
+    "-t",
+    dest="thread",
+    default=5,
+    help="The number of threads")
 args = parser.parse_args()
 starttime = datetime.datetime.now()
 
@@ -239,7 +214,7 @@ if args.url:
                 filename = args.url.split('/')[-1]
             else:
                 filename = args.url
-            out2excel(filename, result, result_af)
+            outman.save2excel(filename, result, result_af)
         else:
             logger.warn(f'{args.url}的扫描结果为空')
     else:
@@ -247,8 +222,8 @@ if args.url:
 elif args.list:
     try:
         for url in open(args.list).readlines():
-            url=str(url.strip('\n'))
-            logger.info(f'Fuzzing the url is {args.url}')
+            url = str(url.strip('\n'))
+            logger.info(f'Fuzzing the url is {url}')
 
             fuzz_man = Fuzzdir(url)
 
@@ -271,7 +246,7 @@ elif args.list:
                         filename = url.split('/')[-1]
                     else:
                         filename = url
-                    out2excel(filename, result, result_af)
+                    outman.save2excel(filename, result, result_af)
                 else:
                     logger.warn(f'{url}的扫描结果为空')
 
@@ -284,4 +259,3 @@ else:
 endtime = datetime.datetime.now()
 costtime = (endtime - starttime).seconds
 logger.info(f'ALL Time is {costtime}s')
-

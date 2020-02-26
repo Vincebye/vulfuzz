@@ -11,12 +11,14 @@ import xlwt
 import os
 # console_log=f'[{hour}:{minute}:{sec}]- {code} - {size}B -url'
 # console_log_302=f'[{hour}:{minute}:{sec}]- {code} - {size}B ->{_302url}'
-
+from lib.log import Log
 # 取消SSL警告
 requests.packages.urllib3.disable_warnings()
 # 存放最后筛选之后的结果
 result_queue = queue.Queue()
 
+#日志信息输出实例化对象
+logger=Log()
 
 def out2excel(name, pageobject_list_bf, pageobject_list_af=None):
     workbook = xlwt.Workbook(encoding='utf-8')
@@ -188,49 +190,13 @@ class Fuzzdir:
     def if_files_exist(self, url, i):
         global result_queue
         code, size, _302_url, page_hash = self._req_code(url + i)
-        dt = datetime.datetime.now()
-        hour = dt.hour
-        minute = dt.minute
-        sec = dt.second
         path = i
-        if code in self.exist_code:
-            if code == 200:
-                # print(Fore.GREEN+Style.BRIGHT+f'[{hour}:{minute}:{sec}]- {code} - {size}B -{path}')
-                print(
-                    Fore.GREEN +
-                    Style.BRIGHT +
-                    f'[{hour}:{minute}:{sec}]- {code} - {page_hash[0:7]} - {size}B -{path}')
 
-            else:
-                # print(Fore.BLUE+Style.BRIGHT+f'[{hour}:{minute}:{sec}]- {code} - {size}B -{path}')
-                print(
-                    Fore.BLUE +
-                    Style.BRIGHT +
-                    f'[{hour}:{minute}:{sec}]- {code} - {page_hash[0:7]} - {size}B -{path}')
+        logger.info(code=code, hash=page_hash, size=size, path=path, _302_url=_302_url)
+
+        if code in self.exist_code or self._302_code:
             page = Page(code, page_hash, size, path)
             result_queue.put(page)
-        elif code in self._302_code:
-            # 显示的是重定向之后的hash
-            print(
-                Fore.CYAN +
-                Style.BRIGHT +
-                f'[{hour}:{minute}:{sec}]- {code} - {size}B -{path}    -->     {_302_url} - {page_hash[0:7]}')
-            page = Page(code, page_hash, size, path)
-            result_queue.put(page)
-        # else:
-        #     print(Fore.BLUE+Style.BRIGHT+f'[{hour}:{minute}:{sec}]- {code} - {size}B -{path}')
-
-    # 主要执行文件
-
-    def dirbuster(self):
-        print(Fore.CYAN + Style.BRIGHT + f'Fuzzing>>{self.url}')
-        print('\n')
-        if self._check_404():
-            print(Fore.MAGENTA + Style.NORMAL + f'The page is 404->{self.url}')
-            exit()
-        files_path_list = self._get_files_path()
-        # for i in files_path_list:
-        #     self.if_files_exist(self.url, i)
 
     def dirfinder(self):
         global crawl_queue
@@ -252,7 +218,7 @@ starttime = datetime.datetime.now()
 
 if args.url:
     fuzz_man = Fuzzdir(args.url)
-    print(Fore.BLUE + Style.BRIGHT + f'Fuzzing the url is {args.url}')
+    logger.info(f'Fuzzing the url is {args.url}')
 
     if fuzz_man._check_valid() and fuzz_man._check_404():
         threads = []
@@ -275,14 +241,14 @@ if args.url:
                 filename = args.url
             out2excel(filename, result, result_af)
         else:
-            print(Fore.RED + Style.NORMAL + f'输出结果为空')
+            logger.warn(f'{args.url}的扫描结果为空')
     else:
-        print(Fore.RED + Style.NORMAL + f'URL无效')
+        logger.error(f'{args.url}无效')
 elif args.list:
     try:
         for url in open(args.list).readlines():
             url=str(url.strip('\n'))
-            print(Fore.BLUE + Style.BRIGHT + f'Fuzzing the url is {url}')
+            logger.info(f'Fuzzing the url is {args.url}')
 
             fuzz_man = Fuzzdir(url)
 
@@ -307,16 +273,15 @@ elif args.list:
                         filename = url
                     out2excel(filename, result, result_af)
                 else:
-                    print(len(result))
-                    print(Fore.RED + Style.NORMAL + f'输出结果为空')
+                    logger.warn(f'{url}的扫描结果为空')
 
     except OSError as e:
-        print(Fore.RED + Style.NORMAL + f'未找到名为{args.list}的文件')
+        logger.error(f'未找到名为{args.list}的文件')
 
 else:
     print('url')
 
 endtime = datetime.datetime.now()
 costtime = (endtime - starttime).seconds
-print(Fore.YELLOW + Style.NORMAL + f'ALL Time is {costtime}s')
+logger.info(f'ALL Time is {costtime}s')
 

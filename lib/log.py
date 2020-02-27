@@ -2,10 +2,6 @@ from colorama import Fore, Style
 import datetime
 
 
-# dt = datetime.datetime.now()
-#         hour = dt.hour
-#         minute = dt.minute
-#         sec = dt.second
 class Log:
     # info_color='GREEN'
     # warn_color='YELLOW'
@@ -55,6 +51,8 @@ class Log:
                     Style.BRIGHT +
                     f'[{dt.hour}:{dt.minute}:{dt.second}]- {code} - {size}B -{path}    -->     {_302_url} - {hash[0:7]}')
             elif code == 404:
+                pass
+            elif code==520:
                 pass
             else:
                 print(

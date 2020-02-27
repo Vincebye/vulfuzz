@@ -1,25 +1,28 @@
 import requests
-import re
 import argparse
 import time
 import datetime
 import hashlib
 import threading
 import queue
-import xlwt
-import os
+
 
 from lib.log import Log
 from lib.output import Output
+from lib.learn import Learn
 # 取消SSL警告
 requests.packages.urllib3.disable_warnings()
 # 存放最后筛选之后的结果
 result_queue = queue.Queue()
 
+local_practice_txt='practice.txt'
 # 日志信息输出实例化对象
 logger = Log()
 # 报告输出实例话对象
 outman = Output()
+#学习类实例对象
+learner=Learn()
+
 
 
 class Page:
@@ -45,15 +48,16 @@ def queue2list(queue):
 
 
 class Task(threading.Thread):
-    def __init__(self, t_name, func):
+    def __init__(self, t_name, func,target):
         super(Task, self).__init__()
         self.name = t_name
         self.func = func
+        self.target=target
 
     def run(self):
         #print(f'Now running the the thread is {self.name}\n')
         try:
-            self.func()
+            self.func(self.target)
         except Exception:
             pass
 
@@ -65,11 +69,10 @@ class Task(threading.Thread):
 
 
 class Fuzzdir:
-    def __init__(self, url):
-        self.url = url
+    def __init__(self):
         self.proxy = {}
         self.timeout = 3
-        self.mixed_file = '1.txt'
+        self.mixed_file = local_practice_txt
         self.exist_code = [200, 403]
         self._302_code = [301, 302]
         self.num = 1000
@@ -83,12 +86,14 @@ class Fuzzdir:
 
     # 从list中读取path
 
-    def _get_files_path(self):
+    def get_files_path(self):
         f = open(self.mixed_file, 'r')
         mixed_keywords = f.readlines()
         f.close()
         return [i.strip() for i in mixed_keywords]
 
+    def get_mongo_path(self):
+        return learner.get_files_path()
     # 获取请求url的状态码、大小、重定向URL,hash
 
     def _req_code(self, url):
@@ -108,7 +113,7 @@ class Fuzzdir:
             _302_url = req.url
             page_hash = hashlib.md5(req.content).hexdigest()
         except BaseException as e:
-            # print(e)
+            #print(e)
             code = 520
             size = 0
             _302_url = 0
@@ -125,8 +130,8 @@ class Fuzzdir:
 
     # 检测页面是否有效
 
-    def _check_valid(self):
-        code, _, _, _ = self._req_code(self.url)
+    def check_valid(self,url):
+        code, _, _, _ = self._req_code(url)
         if code not in [200, 403, 404]:
             return False
         else:
@@ -134,10 +139,10 @@ class Fuzzdir:
 
     # 检测网站是否对404页面正确响应
 
-    def _check_404(self):
-        url = self.url + '/check_404_' + str(time.time())
+    def check_404(self,url):
+        url = url + '/check_404_' + str(time.time())
         code, _, _, _ = self._req_code(url)
-        if code in [200, 520, 403]:
+        if code in [200, 520, 403, 302]:
             return False
         elif code == 404:
             return True
@@ -145,7 +150,7 @@ class Fuzzdir:
             return True
     # 检测页面hash是否重复,Page对象列表
 
-    def _check_page_hash(self, pageOblist):
+    def check_page_hash(self, pageOblist):
         result = []
         result_hash = []
         for i in pageOblist:
@@ -172,13 +177,16 @@ class Fuzzdir:
             page = Page(code, page_hash, size, path)
             result_queue.put(page)
 
-    def dirfinder(self):
+    def dirfinder(self,url):
         global crawl_queue
         while not crawl_queue.empty():
             crawl_url = crawl_queue.get()
-            self.if_files_exist(self.url, crawl_url)
+            self.if_files_exist(url, crawl_url)
             crawl_queue.task_done()
 
+
+#爆破扫描实例对象
+fuzzer = Fuzzdir()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-u", dest="url", help="Please input a url to dir")
@@ -188,74 +196,57 @@ parser.add_argument(
     dest="thread",
     default=5,
     help="The number of threads")
+parser.add_argument('--learn', dest='source', action='store_const',
+                     const='mongo', default='file',
+                     help='define the source of the path data')
 args = parser.parse_args()
 starttime = datetime.datetime.now()
 
-if args.url:
-    fuzz_man = Fuzzdir(args.url)
-    logger.info(f'Fuzzing the url is {args.url}')
+fuzz_list = []  # 待扫描URL列表
 
-    if fuzz_man._check_valid() and fuzz_man._check_404():
+
+# if args.source=='mongo':
+#     fuzzer = Fuzzdir(args.url)
+#     print(len(fuzzer.get_mongo_path()))
+# exit()
+
+if args.url:
+    fuzz_list.append(args.url)
+elif args.list:
+    try:
+        for i in open(args.list).readlines():
+            fuzz_list.append(i.strip('\n'))
+    except OSError as e:
+        logger.error(f'未找到名为{args.list}的文件')
+if args.source=='mongo':
+    crawl_list=learner.get_files_path()
+else:
+    crawl_list=fuzzer.get_files_path()
+
+
+for url in fuzz_list:
+    logger.info(f'Fuzzing the url is {url}\n')
+
+    if fuzzer.check_valid(url) and fuzzer.check_404(url):
         threads = []
-        crawl_queue = list2queue(fuzz_man._get_files_path())
+        crawl_queue = list2queue(crawl_list)
         for i in range(0, int(args.thread)):
-            t = Task(t_name=i, func=fuzz_man.dirfinder)
+            t = Task(t_name=i, func=fuzzer.dirfinder,target=url)
             t.daemon = True
             t.start()
             threads.append(t)
         crawl_queue.join()
         for t in threads:
             t.join()
-
         result = queue2list(result_queue)
         if len(result) != 0:
-            result_af = fuzz_man._check_page_hash(result)
-            if '/' in args.url:
-                filename = args.url.split('/')[-1]
-            else:
-                filename = args.url
-            outman.save2excel(filename, result, result_af)
+            result_af = fuzzer.check_page_hash(result)
+            learner.study_from_list(result)
+            outman.save2excel(url, result, result_af)
         else:
-            logger.warn(f'{args.url}的扫描结果为空')
-    else:
-        logger.error(f'{args.url}无效')
-elif args.list:
-    try:
-        for url in open(args.list).readlines():
-            url = str(url.strip('\n'))
-            logger.info(f'Fuzzing the url is {url}')
+            logger.warn(f'{url}的扫描结果为空')
 
-            fuzz_man = Fuzzdir(url)
-
-            if fuzz_man._check_valid() and fuzz_man._check_404():
-                threads = []
-                fuzz_man = Fuzzdir(url)
-                crawl_queue = list2queue(fuzz_man._get_files_path())
-                for i in range(0, int(args.thread)):
-                    t = Task(t_name=i, func=fuzz_man.dirfinder)
-                    t.daemon = True
-                    t.start()
-                    threads.append(t)
-                crawl_queue.join()
-                for t in threads:
-                    t.join()
-                result = queue2list(result_queue)
-                if len(result) != 0:
-                    result_af = fuzz_man._check_page_hash(result)
-                    if '/' in url:
-                        filename = url.split('/')[-1]
-                    else:
-                        filename = url
-                    outman.save2excel(filename, result, result_af)
-                else:
-                    logger.warn(f'{url}的扫描结果为空')
-
-    except OSError as e:
-        logger.error(f'未找到名为{args.list}的文件')
-
-else:
-    print('url')
-
+learner.update_local_txt(local_practice_txt)
 endtime = datetime.datetime.now()
 costtime = (endtime - starttime).seconds
 logger.info(f'ALL Time is {costtime}s')

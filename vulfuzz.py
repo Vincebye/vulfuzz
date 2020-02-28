@@ -26,6 +26,7 @@ class Page:
         self.size = size
         self.path = path
 
+
 def clean_none(list):
     return [i for i in list if i]
 
@@ -38,7 +39,7 @@ def clean_none(list):
 
 class Fuzzdir:
     def __init__(self):
-        self.timeout=3
+        self.timeout = 3
         self.proxy = {}
         self.headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;",
@@ -47,7 +48,6 @@ class Fuzzdir:
             "Referer": "https://www.baidu.com/",
             "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.90 Safari/537.36"
         }
-
 
     # 检测请求中是否存在重定向操作
 
@@ -117,9 +117,10 @@ class Fuzzdir:
     # 重定向两种显示方式：
     # 1.显示重定向之后的页面*
     # 2.显示302指向某页面
+
     async def fetch(self, session, host, path):
         try:
-            async with session.get(host + path, headers=self.headers,timeout=60, verify_ssl=False) as response:
+            async with session.get(host + path, headers=self.headers, timeout=60, verify_ssl=False) as response:
 
                 try:
                     content = await response.text()
@@ -145,13 +146,15 @@ class Fuzzdir:
 
 # 爆破扫描实例对象
 fuzzer = Fuzzdir()
-#输入实例对象
-iner=In()
+# 输入实例对象
+iner = In()
+
+
 async def main():
-    args=iner.get_cmdline()
+    args = iner.get_cmdline()
     starttime = datetime.datetime.now()
-    fuzz_list=iner.get_fuzzing_paths(args)
-    crawl_list=iner.get_aims(args)
+    fuzz_list = iner.get_fuzzing_paths(args)
+    crawl_list = iner.get_aims(args)
 
     table_list = []
     async with aiohttp.ClientSession() as session:
@@ -164,7 +167,7 @@ async def main():
                     result_af = fuzzer.check_page_hash(page_list)
                     learner.study_from_list(page_list)
                     outman.save2excel(fuzz_url, page_list, result_af)
-                    table_list.append((fuzz_url,len(result_af)))
+                    table_list.append((fuzz_url, result_af))
                 else:
                     logger.warn(f'{fuzz_url}的扫描结果为空')
 
@@ -172,6 +175,7 @@ async def main():
     endtime = datetime.datetime.now()
     costtime = (endtime - starttime).seconds
     outman.print2table(table_list)
+    outman.page2table(table_list)
     logger.info(f'ALL Time is {costtime}s')
 
 asyncio.run(main())

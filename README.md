@@ -29,4 +29,3 @@ python run.py - u www.example.com
 -u  指定扫描URL
 
 -l 载入扫描列表
-

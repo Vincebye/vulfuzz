@@ -44,6 +44,15 @@ class Output:
         table = PrettyTable(['ID', 'URL', 'FilterNums'])
         id = 1
         for i in resultlist:
-            table.add_row([id,i[0],i[1]])
+            table.add_row([id,i[0],len(i[1])])
             id = id + 1
-        print(table)
+
+
+    def page2table(self,resultlist):
+            table = PrettyTable(['ID', 'URL', 'Code','Size','Hash'])
+            for result in resultlist:
+                id = 1
+                for i in result[-1]:
+                    table.add_row([id, result[0]+i.path, i.code,i.size,i.hash[0:7]])
+                    id = id + 1
+            print(table)

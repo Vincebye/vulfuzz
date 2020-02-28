@@ -1,6 +1,6 @@
 from colorama import Fore, Style
 import datetime
-
+import sys
 
 class Log:
     # info_color='GREEN'
@@ -67,9 +67,9 @@ class Log:
             Style.BRIGHT +
             f'[{dt.hour}:{dt.minute}:{dt.second}]{message}')
 
-    def debug(self, message):
+    def debug(self,message):
         dt = datetime.datetime.now()
         print(
-            Fore.GREEN +
+            Fore.RED +
             Style.BRIGHT +
             f'[{dt.hour}:{dt.minute}:{dt.second}]{message}')

@@ -15,16 +15,18 @@ class Learn:
     def update_data(self,path):
         condition = {'path': path}
         fuzzer = self.collection.find_one(condition)
-        fuzzer['verify_count'] = fuzzer['verify_count']+1
-        result = self.collection.update_one(condition, {'$set': fuzzer})
+        if fuzzer:
+            fuzzer['verify_count'] = fuzzer['verify_count']+1
+            result = self.collection.update_one(condition, {'$set': fuzzer})
+        else:
+            print(f'mongo没有{path}')
+
 
     def study_from_list(self,pageobjlist):
             for page in pageobjlist:
                 if page.code==200:
-                    try:
-                        self.update_data(page.path)
-                    except Exception as e:
-                        print(e)
+                    self.update_data(page.path)
+
 
     def update_local_txt(self,filename):
         f=open(filename,'w')

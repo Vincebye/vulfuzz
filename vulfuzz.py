@@ -1,21 +1,16 @@
 import requests
-import argparse
 import time
 import datetime
 import hashlib
-import threading
-import queue
 import aiohttp
 import asyncio
 from lib.log import Log
 from lib.output import Output
 from lib.learn import Learn
+from lib.iin import In
+from lib.config import local_practice_txt
 # 取消SSL警告
 requests.packages.urllib3.disable_warnings()
-# 存放最后筛选之后的结果
-result_queue = queue.Queue()
-
-local_practice_txt = 'practice.txt'
 # 日志信息输出实例化对象
 logger = Log()
 # 报告输出实例话对象
@@ -31,38 +26,8 @@ class Page:
         self.size = size
         self.path = path
 
-
-def list2queue(list):
-    q = queue.Queue()
-    for i in list:
-        q.put(i)
-    return q
-
-
-def queue2list(queue):
-    result = []
-    while not queue.empty():
-        result.append(queue.get())
-    return result
-
-
 def clean_none(list):
     return [i for i in list if i]
-
-
-class Task(threading.Thread):
-    def __init__(self, t_name, func, target):
-        super(Task, self).__init__()
-        self.name = t_name
-        self.func = func
-        self.target = target
-
-    def run(self):
-        #print(f'Now running the the thread is {self.name}\n')
-        try:
-            self.func(self.target)
-        except Exception:
-            pass
 
 # #策略类-定义扫描策略
 # class Strategy:
@@ -73,12 +38,8 @@ class Task(threading.Thread):
 
 class Fuzzdir:
     def __init__(self):
+        self.timeout=3
         self.proxy = {}
-        self.timeout = 3
-        self.mixed_file = local_practice_txt
-        self.exist_code = [200, 403]
-        self._302_code = [301, 302]
-        self.num = 1000
         self.headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;",
             "Accept-Encoding": "gzip",
@@ -87,41 +48,6 @@ class Fuzzdir:
             "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.90 Safari/537.36"
         }
 
-    # 从list中读取path
-
-    def get_files_path(self):
-        f = open(self.mixed_file, 'r',encoding='utf-8')
-        mixed_keywords = f.readlines()
-        f.close()
-        return [i.strip() for i in mixed_keywords]
-
-    def get_mongo_path(self):
-        return learner.get_files_path()
-    # 获取请求url的状态码、大小、重定向URL,hash
-
-    def _req_code(self, url):
-        url = url if url.startswith('http') else 'http://' + url
-        try:
-            req = requests.get(
-                url,
-                verify=False,
-                headers=self.headers,
-                timeout=self.timeout,
-                proxies=self.proxy)
-            if self._check_rediret(req):
-                code = 302
-            else:
-                code = req.status_code
-            size = len(req.content) % 8
-            _302_url = req.url
-            page_hash = hashlib.md5(req.content).hexdigest()
-        except BaseException as e:
-            # print(e)
-            code = 520
-            size = 0
-            _302_url = 0
-            page_hash = '0'
-        return code, size, _302_url, page_hash
 
     # 检测请求中是否存在重定向操作
 
@@ -136,6 +62,7 @@ class Fuzzdir:
     def check_valid(self, url):
         code, _, _, _ = self._req_code(url)
         if code not in [200, 403, 404]:
+            print(code)
             return False
         else:
             return True
@@ -162,44 +89,45 @@ class Fuzzdir:
                 result_hash.append(i.hash)
 
         return result
-    # 检测文件是否存在
+    # 获取请求url的状态码、大小、重定向URL,hash
 
-    def if_files_exist(self, url, i):
-        global result_queue
-        code, size, _302_url, page_hash = self._req_code(url + i)
-        path = i
-
-        logger.info(
-            code=code,
-            hash=page_hash,
-            size=size,
-            path=path,
-            _302_url=_302_url)
-
-        if code in self.exist_code or self._302_code:
-            page = Page(code, page_hash, size, path)
-            result_queue.put(page)
-
-    def dirfinder(self, url):
-        global crawl_queue
-        while not crawl_queue.empty():
-            crawl_url = crawl_queue.get()
-            self.if_files_exist(url, crawl_url)
-            crawl_queue.task_done()
-
+    def _req_code(self, url):
+        url = url if url.startswith('http') else 'http://' + url
+        try:
+            req = requests.get(
+                url,
+                verify=False,
+                headers=self.headers,
+                timeout=self.timeout,
+                proxies=self.proxy)
+            if self._check_rediret(req):
+                code = 302
+            else:
+                code = req.status_code
+            size = len(req.content) % 8
+            _302_url = req.url
+            page_hash = hashlib.md5(req.content).hexdigest()
+        except BaseException as e:
+            print(e)
+            code = 520
+            size = 0
+            _302_url = 0
+            page_hash = '0'
+        return code, size, _302_url, page_hash
     # 重定向两种显示方式：
     # 1.显示重定向之后的页面*
     # 2.显示302指向某页面
-    async def fetch(self, session, host,path):
+    async def fetch(self, session, host, path):
         try:
-            async with session.get(host+path, headers=self.headers) as response:
+            async with session.get(host + path, headers=self.headers,timeout=60, verify_ssl=False) as response:
+
                 try:
                     content = await response.text()
                     size = len(content) % 8
                     hash = hashlib.md5(content.encode('utf-8')).hexdigest()
                     code = response.status
                     if response.history:
-                        code=302
+                        code = 302
                     logger.info(
                         code=code,
                         hash=hash,
@@ -210,70 +138,40 @@ class Fuzzdir:
                     return page
                 except Exception as e:
                     print(e)
-        except aiohttp.InvalidURL as e:
-            print('InvalidURL'+str(path))
-            # return (900, str(e))
-        except aiohttp.ClientConnectorError:
-            print('Unreachable')
-            # return (901, "Unreachable")
+        except Exception as e:
+            print(e)
 
 
 
 # 爆破扫描实例对象
 fuzzer = Fuzzdir()
-
-
+#输入实例对象
+iner=In()
 async def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-u", dest="url", help="Please input a url to dir")
-    parser.add_argument("-l", dest="list", help="A list to scan")
-    parser.add_argument(
-        "-t",
-        dest="thread",
-        default=5,
-        help="The number of threads")
-    parser.add_argument('--learn', dest='source', action='store_const',
-                        const='mongo', default='file',
-                        help='define the source of the path data')
-    args = parser.parse_args()
+    args=iner.get_cmdline()
     starttime = datetime.datetime.now()
+    fuzz_list=iner.get_fuzzing_paths(args)
+    crawl_list=iner.get_aims(args)
 
-    fuzz_list = []  # 待扫描URL列表
-    if args.url:
-        fuzz_list.append(args.url)
-    elif args.list:
-        try:
-            for i in open(args.list).readlines():
-                fuzz_list.append(i.strip('\n'))
-        except OSError as e:
-            logger.error(f'未找到名为{args.list}的文件')
-    if args.source == 'mongo':
-        crawl_list = learner.get_files_path()
-    else:
-        crawl_list = fuzzer.get_files_path()
-    pages_list = []
+    table_list = []
     async with aiohttp.ClientSession() as session:
         for fuzz_url in fuzz_list:
             logger.info(f'Fuzzing the url is {fuzz_url}\n')
             if fuzzer.check_valid(fuzz_url) and fuzzer.check_404(fuzz_url):
-
                 page_list = await asyncio.gather(*[fuzzer.fetch(session, fuzz_url, path) for path in crawl_list])
-
                 page_list = clean_none(page_list)
                 if len(page_list) != 0:
                     result_af = fuzzer.check_page_hash(page_list)
-
                     learner.study_from_list(page_list)
-
                     outman.save2excel(fuzz_url, page_list, result_af)
-
-                    pages_list.extend(page_list)
+                    table_list.append((fuzz_url,len(result_af)))
                 else:
                     logger.warn(f'{fuzz_url}的扫描结果为空')
 
     learner.update_local_txt(local_practice_txt)
     endtime = datetime.datetime.now()
     costtime = (endtime - starttime).seconds
+    outman.print2table(table_list)
     logger.info(f'ALL Time is {costtime}s')
 
 asyncio.run(main())

@@ -1,6 +1,8 @@
 import xlwt
 import os
 import datetime
+from prettytable import PrettyTable
+
 class Output:
     def save2excel(self,name, pageobject_list_bf, pageobject_list_af=None):
         max_row=65535
@@ -37,3 +39,11 @@ class Output:
                 worksheet.write(line, 3, i.path)
 
         workbook.save(f'{os.getcwd()}/reports/{name}-{str(datetime.datetime.now())[:-7]}.xls')
+
+    def print2table(self,resultlist):
+        table = PrettyTable(['ID', 'URL', 'FilterNums'])
+        id = 1
+        for i in resultlist:
+            table.add_row([id,i[0],i[1]])
+            id = id + 1
+        print(table)

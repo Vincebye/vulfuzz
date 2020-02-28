@@ -24,13 +24,9 @@ Todo
 
 使用说明
 
-python run.py - u www.example.com - t 100
+python run.py - u www.example.com
 
 -u  指定扫描URL
 
 -l 载入扫描列表
-
--t  指定运行线程数目
-
---learn 练习模式
 

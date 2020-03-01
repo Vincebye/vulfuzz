@@ -8,7 +8,7 @@ from lib.log import Log
 from lib.output import Output
 from lib.learn import Learn
 from lib.iin import In
-from lib.config import local_practice_txt
+from lib.config import local_find_txt
 # 取消SSL警告
 requests.packages.urllib3.disable_warnings()
 # 日志信息输出实例化对象
@@ -62,7 +62,7 @@ class Fuzzdir:
     def check_valid(self, url):
         code, _, _, _ = self._req_code(url)
         if code not in [200, 403, 404]:
-            print(code)
+            #print(code)
             return False
         else:
             return True
@@ -108,7 +108,7 @@ class Fuzzdir:
             _302_url = req.url
             page_hash = hashlib.md5(req.content).hexdigest()
         except BaseException as e:
-            print(e)
+            #print(e)
             code = 520
             size = 0
             _302_url = 0
@@ -138,9 +138,11 @@ class Fuzzdir:
                     page = Page(code, hash, size, path)
                     return page
                 except Exception as e:
-                    print(e)
+                    pass
+                    #print(e)
         except Exception as e:
-            print(e)
+            pass
+            #print(e)
 
 
 
@@ -154,28 +156,30 @@ async def main():
     args = iner.get_cmdline()
     starttime = datetime.datetime.now()
     fuzz_list = iner.get_fuzzing_paths(args)
+    logger.info(f'装载Fuzzing目录数目:[{len(fuzz_list)}]')
     crawl_list = iner.get_aims(args)
+    logger.info(f'待扫描URL数目:[{len(crawl_list)}]')
 
     table_list = []
     async with aiohttp.ClientSession() as session:
-        for fuzz_url in fuzz_list:
+        for fuzz_url in crawl_list:
             logger.info(f'Fuzzing the url is {fuzz_url}\n')
             if fuzzer.check_valid(fuzz_url) and fuzzer.check_404(fuzz_url):
-                page_list = await asyncio.gather(*[fuzzer.fetch(session, fuzz_url, path) for path in crawl_list])
+                page_list = await asyncio.gather(*[fuzzer.fetch(session, fuzz_url, path) for path in fuzz_list])
                 page_list = clean_none(page_list)
                 if len(page_list) != 0:
                     result_af = fuzzer.check_page_hash(page_list)
-                    learner.study_from_list(page_list)
+                    #learner.study_from_list(page_list)
                     outman.save2excel(fuzz_url, page_list, result_af)
                     table_list.append((fuzz_url, result_af))
                 else:
                     logger.warn(f'{fuzz_url}的扫描结果为空')
 
-    learner.update_local_txt(local_practice_txt)
     endtime = datetime.datetime.now()
     costtime = (endtime - starttime).seconds
     outman.print2table(table_list)
     outman.page2table(table_list)
     logger.info(f'ALL Time is {costtime}s')
+    #learner.update_local_txt(local_practice_txt)
 
 asyncio.run(main())

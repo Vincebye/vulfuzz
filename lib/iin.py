@@ -1,10 +1,10 @@
 #输入类，用以获取FUZZ数据、目标数据等
 import argparse
-from .config import local_practice_txt
+from .config import local_find_txt
 
 class In:
     def __init__(self):
-        self.mixed_file=local_practice_txt
+        self.mixed_file=local_find_txt
     #获得命令行参数
     def get_cmdline(self):
         parser = argparse.ArgumentParser()
@@ -16,8 +16,9 @@ class In:
                             help='define the source of the path data')
         args = parser.parse_args()
         return args
-    #获得爆破路径的数据
-    def get_fuzzing_paths(self,args):
+
+    #获得待扫描待URL列表
+    def get_aims(self,args):
         fuzz_list=[]
         if args.url:
             fuzz_list.append(args.url)
@@ -30,7 +31,9 @@ class In:
                 #logger.error(f'未找到名为{args.list}的文件')
         return fuzz_list
 
-    def get_aims(self,args):
+    #获得爆破路径的数据
+
+    def get_fuzzing_paths(self,args):
         if not args.wordlist:
             filename=self.mixed_file
         else:

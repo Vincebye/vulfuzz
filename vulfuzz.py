@@ -2,6 +2,7 @@ import requests
 import asyncio
 from lib.learn import Learn
 from lib.core.dir import Dir
+from lib.core.spider import Spider
 # 取消SSL警告
 requests.packages.urllib3.disable_warnings()
 
@@ -18,7 +19,7 @@ learner = Learn()
 #         logger.info(f'ALL Time is {costtime}s')
 #     return wrapper
 
-direr=Dir()
+direr = Dir()
+spider=Spider()
 
-
-asyncio.run(direr.run())
+asyncio.run(spider.run())

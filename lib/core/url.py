@@ -52,6 +52,7 @@ class Url:
         else:
             return True
 
+
     # 检测页面hash是否重复,Page对象列表
 
     def check_page_hash(self, pageOblist):

@@ -1,13 +1,15 @@
-#URL处理相关方法
+# URL处理相关方法
 from urllib.parse import urlparse
 import requests
 import time
 import hashlib
 from . import logger
 from .clazz import Page
+
+
 class Url:
     def __init__(self):
-
+        self.similar=set()
         self.timeout = 3
         self.proxy = {}
         self.headers = {
@@ -18,8 +20,8 @@ class Url:
             "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.90 Safari/537.36"
         }
 
-    #获得URL的Host
-    def get_host(self,url):
+    # 获得URL的Host
+    def get_host(self, url):
         return urlparse(url).netloc
 
     # 检测请求中是否存在重定向操作
@@ -52,7 +54,6 @@ class Url:
         else:
             return True
 
-
     # 检测页面hash是否重复,Page对象列表
 
     def check_page_hash(self, pageOblist):
@@ -84,7 +85,7 @@ class Url:
             _302_url = req.url
             page_hash = hashlib.md5(req.content).hexdigest()
         except BaseException as e:
-            #print(e)
+            # print(e)
             code = 520
             size = 0
             _302_url = 0
@@ -115,9 +116,34 @@ class Url:
                     return page
                 except Exception as e:
                     pass
-                    #print(e)
+                    # print(e)
         except Exception as e:
             pass
-            #print(e)
+            # print(e)
 
+    # 构成一个三元组
+    # 第一项为URL的netloc
+    # 第二项为path的每项的拆分长度
+    # 第三项为query的每个参数名称（按照字母顺序排序）
+    def format(self, url):
+        if urlparse(url).path=='':
+            url=url+'/'
+        url_structure = urlparse(url)
+        netloc = url_structure.netloc
+        path = url_structure.path
+        query = url_structure.query
+        formated = (netloc,
+                    tuple([len(i) for i in path.split('/')]),
+                    tuple(sorted([i.split('=')[0] for i in query.split('&')])))
+        return formated
 
+    #判定页面相似
+    #True 不相似
+    #False 相似
+    def control_similar_url(self,url):
+        t=self.format(url)
+        if t not in self.similar:
+            self.similar.add(t)
+            return True
+        else:
+            return False

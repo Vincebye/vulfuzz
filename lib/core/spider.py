@@ -8,7 +8,7 @@ import aiohttp
 import asyncio
 import async_timeout
 from .url import Url
-from . import iner,logger
+from . import iner, logger
 urllib3.disable_warnings()
 
 
@@ -29,7 +29,7 @@ class Spider(Url):
                 verify=False,
                 timeout=7).text
         except Exception as e:
-            #print(e)
+            # print(e)
             return
         # domain=urlparse(url).scheme+'://'+urlparse(url).netloc
         self.crawled.add(url)
@@ -37,54 +37,59 @@ class Spider(Url):
         for i in soup.find_all('link'):
             link = self.repair_url(url, i.get('href'))
             if len(link) > 0 and self.check_same_domain(url, link):
-                self.uncrawl.add(link)
+                if self.control_similar_url(link):
+                    self.uncrawl.add(link)
         for j in soup.find_all('a'):
             link = self.repair_url(url, j.get('href'))
             if len(link) > 0 and self.check_same_domain(url, link):
-                self.uncrawl.add(link)
+                if self.control_similar_url(link):
+                    self.uncrawl.add(link)
 
+#负责修复补全URL
     def repair_url(self, domain, url):
+        domain=urlparse(domain).netloc
         if url is None:
             url = ''
         else:
-            url=url.strip(' ')
-            if len(url)>0:
-                url=url.lower()
+            url = url.strip(' ')
+            if len(url) > 0:
+                url = url.lower()
                 if url.startswith('java'):
-                    url=''
+                    url = ''
                 elif url.startswith('mail'):
                     self.mail.add(url)
-                    url=''
+                    url = ''
                 elif url.startswith('http'):
                     if url.split('.')[-1] in self.static_suffix:
                         self.crawled.add(url)
-                        url=''
+                        url = ''
                 else:
                     if url.split('.')[-1] in self.static_suffix:
                         if url.startswith('/'):
-                            self.crawled.add(domain+url)
-                            url=''
+                            self.crawled.add(domain + url)
+                            url = ''
                         else:
-                            self.crawled.add(domain+'/'+url)
-                            url=''
+                            self.crawled.add(domain + '/' + url)
+                            url = ''
                     else:
                         if url.startswith('/'):
-                            url=domain+url
+                            url = domain + url
                         else:
-                            url=domain+'/'+url
+                            url = domain + '/' + url
         return url
 
+    # 检测是否属于该域名网站链接
+    # 暂不支持子域名
+    # Todo子域名
 
-    #检测是否属于该域名网站链接
-    #暂不支持子域名
-    #Todo子域名
-    def check_same_domain(self,domain,url):
-        if urlparse(url).netloc==urlparse(domain).netloc:
+    def check_same_domain(self, domain, url):
+        if urlparse(url).netloc == urlparse(domain).netloc:
             return True
         else:
-            #logger.info(f'{domain}与{url}非同源')
+            # logger.info(f'{domain}与{url}非同源')
             return False
     # 显示所有已爬取链接
+
     def show_crawled(self):
         for i in self.crawled:
             print(i)
@@ -100,16 +105,18 @@ class Spider(Url):
 
                 soup = BeautifulSoup(text, "lxml")
                 for i in soup.find_all('link'):
-                    link=self.repair_url(url, i.get('href'))
-                    if len(link)>0 and self.check_same_domain(url,link):
-                        self.uncrawl.add(link)
+                    link = self.repair_url(url, i.get('href'))
+                    if len(link) > 0 and self.check_same_domain(url, link):
+                        if self.control_similar_url(link):
+                            self.uncrawl.add(link)
                 for j in soup.find_all('a'):
-                    link=self.repair_url(url, j.get('href'))
-                    if len(link)>0 and self.check_same_domain(url,link):
-                        self.uncrawl.add(link)
+                    link = self.repair_url(url, j.get('href'))
+                    if len(link) > 0 and self.check_same_domain(url, link):
+                        if self.control_similar_url(link):
+                            self.uncrawl.add(link)
         except Exception as e:
             pass
-            #print(e)
+            # print(e)
 
     async def run(self):
         args = iner.get_cmdline()
@@ -120,3 +127,7 @@ class Spider(Url):
                 await asyncio.gather(*[self.fetch(session, target) for target in self.uncrawl])
                 logger.info(f'待扫描集合数目为：{len(self.uncrawl)}')
                 logger.info(f'已扫描集合数目为：{len(self.crawled)}')
+        f=open('1.txt','a')
+        for i in self.crawled:
+            f.write(i+'\n')
+        f.close()

@@ -137,13 +137,4 @@ class Url:
                     tuple(sorted([i.split('=')[0] for i in query.split('&')])))
         return formated
 
-    #判定页面相似
-    #True 不相似
-    #False 相似
-    def control_similar_url(self,url):
-        t=self.format(url)
-        if t not in self.similar:
-            self.similar.add(t)
-            return True
-        else:
-            return False
+

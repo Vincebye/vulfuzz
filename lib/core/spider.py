@@ -9,6 +9,7 @@ import asyncio
 import async_timeout
 from .url import Url
 from . import iner, logger
+from ..config import spider_filter_level
 urllib3.disable_warnings()
 
 
@@ -20,6 +21,12 @@ class Spider(Url):
         self.mail = set()
         self.static_suffix = ['ico', 'js', 'css', 'jpg', 'png']
 
+    #配置爬虫的相关配置信息
+    def init_spider_configuration(self,spider_filter_level):
+            self.spider_filter_level=spider_filter_level
+    #从response中获得敏感信息
+    def osint(self):
+        pass
     # 首次爬取URL，获取页面其他URL
     def crawl_url(self, url):
         try:
@@ -29,8 +36,7 @@ class Spider(Url):
                 verify=False,
                 timeout=7).text
         except Exception as e:
-            # print(e)
-            return
+            logger.error(e)
         # domain=urlparse(url).scheme+'://'+urlparse(url).netloc
         self.crawled.add(url)
         soup = BeautifulSoup(text, "lxml")
@@ -45,9 +51,9 @@ class Spider(Url):
                 if self.control_similar_url(link):
                     self.uncrawl.add(link)
 
-#负责修复补全URL
+# 负责修复补全URL
     def repair_url(self, domain, url):
-        domain=urlparse(domain).netloc
+        domain = urlparse(domain).netloc
         if url is None:
             url = ''
         else:
@@ -118,8 +124,24 @@ class Spider(Url):
             pass
             # print(e)
 
+        # 判定页面相似
+        # True 不相似
+        # False 相似
+    def control_similar_url(self, url):
+        if self.spider_filter_level==0:
+            return True
+        elif self.spider_filter_level==1:
+            t = self.format(url)
+            if t not in self.similar:
+                logger.info(f'检测{url}不相似')
+                self.similar.add(t)
+                return True
+            else:
+                logger.info(f'检测{url}相似')
+                return False
     async def run(self):
         args = iner.get_cmdline()
+        self.init_spider_configuration(spider_filter_level)
         self.crawl_url(args.url)
         async with aiohttp.ClientSession() as session:
             while(len(self.uncrawl) != 0):
@@ -127,7 +149,7 @@ class Spider(Url):
                 await asyncio.gather(*[self.fetch(session, target) for target in self.uncrawl])
                 logger.info(f'待扫描集合数目为：{len(self.uncrawl)}')
                 logger.info(f'已扫描集合数目为：{len(self.crawled)}')
-        f=open('1.txt','a')
+        f = open('1.txt', 'a')
         for i in self.crawled:
-            f.write(i+'\n')
+            f.write(i + '\n')
         f.close()

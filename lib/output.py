@@ -4,6 +4,12 @@ import datetime
 from prettytable import PrettyTable
 
 class Output:
+    def save2txt(self,name,datalist):
+        f=open(name,'a+')
+        for i in datalist:
+            f.write(str(i)+'\n')
+        f.close()
+
     def save2excel(self,name, pageobject_list_bf, pageobject_list_af=None):
         max_row=65535
         if '/' in name:

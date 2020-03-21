@@ -1,17 +1,15 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 import urllib3
-import os
-import time
 import aiohttp
 import asyncio
 import datetime
 
-import async_timeout
 from .url import Url
 from . import iner, logger,outman
-from ..config import spider_filter_level
+from lib.utils.config import spider_filter_level
+import re
 urllib3.disable_warnings()
 
 
@@ -180,6 +178,16 @@ class Spider(Url):
                #logger.info(f'检测{url}相似')
                 return False
 
+    #获得URL的List中的动态URL
+    def get_dynamic_urls(self,urls):
+        #index.php?id=1&uid=2
+        dynamic_urls=[]
+        dynamic_rule=re.compile(r'\w+=\w')
+        for url in urls:
+            if dynamic_rule.search(url):
+                dynamic_urls.append(url)
+        return dynamic_urls
+
     async def run(self):
         args = iner.get_cmdline()
         self.init_spider_configuration(spider_filter_level)
@@ -195,6 +203,8 @@ class Spider(Url):
                 logger.info(f'问题集合数目为：{len(self.error_url)}')
         name=str(urlparse(args.url).netloc)
         logger.info(f'第{str(depth)}层')
-        outman.save2txt(name+'已扫描',self.crawled)
-        outman.save2txt(name+'问题',self.error_url)
+        # outman.save2txt(name+'已扫描',self.crawled)
+        # outman.save2txt(name+'问题',self.error_url)
+        for i in self.get_dynamic_urls(self.crawled):
+            print(i)
 

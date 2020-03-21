@@ -1,6 +1,6 @@
 #输入类，用以获取FUZZ数据、目标数据等
 import argparse
-from .config import local_find_txt
+from lib.utils.config import local_find_txt
 
 class In:
     def __init__(self):

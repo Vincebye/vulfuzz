@@ -6,18 +6,19 @@ import aiohttp
 import asyncio
 import datetime
 
-from .url import Url
-from . import iner, logger,outman
+from lib.request.url import Url
+from . import iner, logger
 from lib.utils.config import spider_filter_level
 import re
+
 urllib3.disable_warnings()
 
 
 def timer(func):
-    def wrapper(*args,**kw):
+    def wrapper(*args, **kw):
         starttime = datetime.datetime.now()
-        key=func(*args,**kw)
-        endtime=datetime.datetime.now()
+        key = func(*args, **kw)
+        endtime = datetime.datetime.now()
         costtime = (endtime - starttime).seconds
         logger.info(f'{func.__name__} Time is {costtime}s')
         return key
@@ -33,7 +34,7 @@ class Spider(Url):
         self.static_suffix = ['ico', 'js', 'css', 'jpg', 'png','pdf','json','xls','doc','xml']
 
     # 配置爬虫的相关配置信息
-    def init_spider_configuration(self, spider_filter_level):
+    def init_spider_configuration(self, spider_filter_level=0):
         logger.info(f'正在配置爬虫信息:过滤等级为:{str(spider_filter_level)}')
         self.spider_filter_level = spider_filter_level
     # 从response中获得敏感信息
@@ -44,16 +45,19 @@ class Spider(Url):
 
     @timer
     def crawl_url(self, url):
+        response = None
         try:
             response = requests.get(
                 url,
                 headers=self.headers,
                 verify=False,
                 timeout=7)
+            logger.info(f'URL状态码:{response.status_code}')
         except Exception as e:
             # logger.error(e)
             pass
-        logger.info(f'URL状态码:{response.status_code}')
+        if response == None:
+            return
         self.crawled.add(url)
         soup = BeautifulSoup(response.text, "lxml")
         for i in soup.find_all('link'):
@@ -137,14 +141,7 @@ class Spider(Url):
         #logger.info(url)
         try:
             async with session.get(url, headers=self.headers, timeout=3, verify_ssl=False) as response:
-                try:
-                    response = await session.get(url)
-                except BaseException as e:
-                    self.error_url.add(url)
-                    #logger.warn(f'{str(e)}-----{url}')
-                #assert response.status == 200
                 text = await response.read()
-
                 soup = BeautifulSoup(text, "lxml")
                 for i in soup.find_all('link'):
                     link = self.repair_url(url, i.get('href'))
@@ -156,10 +153,9 @@ class Spider(Url):
                     if len(link) > 0 and self.check_same_domain(url, link):
                         if self.control_similar_url(link):
                             self.uncrawl.add(link)
-        except ConnectionError:
-            logger.warn(f'{url}存在连接问题')
 
         except BaseException as e:
+            self.error_url.add(url)
             pass
 
         # 判定页面相似
@@ -189,22 +185,22 @@ class Spider(Url):
         return dynamic_urls
 
     async def run(self):
+        print('ss')
         args = iner.get_cmdline()
         self.init_spider_configuration(spider_filter_level)
         self.crawl_url(args.url)
         depth=0
         async with aiohttp.ClientSession() as session:
             while(len(self.uncrawl) != 0):
-                depth=depth+1
+                depth = depth + 1
                 self.uncrawl = self.uncrawl - self.crawled
                 await asyncio.gather(*[self.fetch(session, target) for target in self.uncrawl])
                 logger.info(f'待扫描集合数目为：{len(self.uncrawl)}')
                 logger.info(f'已扫描集合数目为：{len(self.crawled)}')
                 logger.info(f'问题集合数目为：{len(self.error_url)}')
-        name=str(urlparse(args.url).netloc)
+        name = str(urlparse(args.url).netloc)
         logger.info(f'第{str(depth)}层')
         # outman.save2txt(name+'已扫描',self.crawled)
         # outman.save2txt(name+'问题',self.error_url)
-        for i in self.get_dynamic_urls(self.crawled):
-            print(i)
-
+        dynamic_urls = self.get_dynamic_urls(self.crawled)
+        return dynamic_urls

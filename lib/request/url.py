@@ -3,13 +3,13 @@ from urllib.parse import urlparse
 import requests
 import time
 import hashlib
-from . import logger
-from .clazz import Page
+from lib.core import logger
+from lib.core.datatype import Page
 
 
 class Url:
     def __init__(self):
-        self.similar=set()
+        self.similar = set()
         self.timeout = 3
         self.proxy = {}
         self.headers = {

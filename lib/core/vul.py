@@ -12,6 +12,7 @@ from lib.plugins.ceye import Ceye
 import datetime
 from lib.core.datatype import Respon
 
+
 class Vul:
     def __init__(self):
         self.headers = {
@@ -26,19 +27,19 @@ class Vul:
                 string.ascii_letters +
                 string.digits,
                 k=15))
-        self.vuls = []#存储存在漏洞的URL
-        self.responses=[]#存储发送请求的res对象
+        self.vuls = []  # 存储存在漏洞的URL
+        self.responses = []  # 存储发送请求的res对象
 
     # 生成SQL注入注入检测Payload
-    def get_sqli_payloads(self,type):
+    def get_sqli_payloads(self, type):
         payloads = []
         seal_character = ['', '\'', '"', '\')', '")']
-        if type=='error':
+        if type == 'error':
             for ch in seal_character:
                 # 报错注入Payload
                 payload = f'{ch} and updatexml(1,concat(0x7e,(SELECT {self.randomstr}),0x7e),1)--+'
                 payloads.append(payload)
-        elif type=='bind':
+        elif type == 'bind':
             for ch in seal_character:
                 # 延时注入Payload
                 payload = f'{ch} and sleep(5)--+'
@@ -48,13 +49,13 @@ class Vul:
             # payloads.append(payload)
         return payloads
 
-    #根据传入的List计算前几次请求的平均时间
-    def get_average_time(self,results):
-        num=len(results)
-        time=0
+    # 根据传入的List计算前几次请求的平均时间
+    def get_average_time(self, results):
+        num = len(results)
+        time = 0
         for i in results:
-            time=time+i.time
-        average_time=time/num
+            time = time + i.time
+        average_time = time / num
         return average_time
 
     # 根据Text分析sql注入是否存在
@@ -66,28 +67,27 @@ class Vul:
 
     # 负责SQL注入检测逻辑引擎
     async def sqli(self, url):
-        vul_flag=0#代表无漏洞
+        vul_flag = 0  # 代表无漏洞
         async with aiohttp.ClientSession() as session:
             for payload in self.get_sqli_payloads('error'):
-                text,lasttime = await self.fetch(session, url,payload)
+                text, lasttime = await self.fetch(session, url, payload)
                 if self.analyse_sqli(text):
-                    vul_flag=1#代表存在漏洞
-                    self.vuls.append((url, payload,'error'))
+                    vul_flag = 1  # 代表存在漏洞
+                    self.vuls.append((url, payload, 'error'))
                     break
-            if vul_flag==0:
+            if vul_flag == 0:
 
                 for payload in self.get_sqli_payloads('bind'):
-                    text,lasttime = await self.fetch(session, url, payload)
-                    average_time=self.get_average_time(self.responses)
-                    #print(str(lasttime)+':'+str(average_time))
-                    if lasttime-average_time>2:
-                        self.vuls.append((url, payload,'bind',str(lasttime),str(average_time)))
+                    text, lasttime = await self.fetch(session, url, payload)
+                    average_time = self.get_average_time(self.responses)
+                    # print(str(lasttime)+':'+str(average_time))
+                    if lasttime - average_time > 2:
+                        self.vuls.append(
+                            (url, payload, 'bind', str(lasttime), str(average_time)))
                         break
 
-
-
-    async def fetch(self, session, url,payload):
-        target=url+payload
+    async def fetch(self, session, url, payload):
+        target = url + payload
         record_info = {}.fromkeys(['IP', 'Type', 'Time', 'Attack_type'])
 
         start = datetime.datetime.now()
@@ -97,18 +97,20 @@ class Vul:
                 text = await response.text()
                 end = datetime.datetime.now()
                 cost = (end - start).seconds
-                self.responses.append(Respon(url,payload,cost))
-                return text,cost
+                self.responses.append(Respon(url, payload, cost))
+                return text, cost
         except Exception as e:
-            return '',0
+            return '', 0
 
-    async def run(self):
-        await asyncio.gather(*[self.sqli(f'http://192.168.1.196/sqli-labs/Less-{str(i)}/index.php?id=1') for i in range(1, 50)])
+    async def run(self, aims):
+        # await asyncio.gather(*[self.sqli(f'http://192.168.1.196/sqli-labs/Less-{str(i)}/index.php?id=1') for i in range(1, 50)])
+        await asyncio.gather(*[self.sqli(aim) for aim in aims])
         print(len(self.vuls))
         for i in self.vuls:
             print(i)
         # for i in self.responses:
         #     print(i.url+':'+str(i.time))
 
-a = Vul()
-asyncio.run(a.run())
+#
+# a = Vul()
+# asyncio.run(a.run())
